@@ -404,6 +404,52 @@ const codechefapi = async (req, res) => {
   }
 };
 
+const getCodeforces = async () => {
+  try {
+    const results = await StudentData.findAll({
+      attributes: ["codeforces", "name", "dept"],
+      where: {
+        codeforces: { [Op.ne]: null },
+      },
+    });
+
+    const data = results
+      .filter((result) => result.codeforces && result.codeforces.trim() !== "")
+      .map((result) => ({
+        codeforces: result.codeforces,
+        name: result.name,
+        dept: result.dept,
+      }));
+
+    return data;
+  } catch (err) {
+    console.error("Error fetching student data:", err);
+    throw err;
+  }
+};
+
+const codeforcesapi = async (req, res) => {
+  try {
+    const students = await getCodeforces();
+    const usernames = students.map((student) => student.codeforces).join(";");
+
+    const response = await axios.get(
+      `https://codeforces.com/api/user.info?handles=${usernames}&checkHistoricHandles=false`
+    );
+    const userData = response.data.result;
+
+    const finalResponse = userData.map((data, index) => ({
+      ...data,
+      name: students[index].name,
+      dept: students[index].dept,
+    }));
+
+    res.json(finalResponse);
+  } catch (err) {
+    res.status(500).send({ success: false, error: err.message });
+  }
+};
+
 module.exports = {
   test,
   loginUser,
@@ -419,4 +465,6 @@ module.exports = {
   getAbsent,
   changePassword,
   codechefapi,
+  getCodeforces,
+  codeforcesapi,
 };
