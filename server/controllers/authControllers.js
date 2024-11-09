@@ -449,6 +449,120 @@ const codeforcesapi = async (req, res) => {
     res.status(500).send({ success: false, error: err.message });
   }
 };
+const leetcodeapi = async (req, res) => {
+  try {
+    const students = await getLeetcode();
+    const fetchPromises = students.map((student) =>
+      leetcodefetch(student.leetcode).then((singleRes) => {
+        singleRes.name = student.name;
+        singleRes.dept = student.dept;
+        return singleRes;
+      })
+    );
+
+    const response = await Promise.all(fetchPromises);
+    res.json(response);
+  } catch (error) {
+    console.log(error);
+    res.status(500).send("Internal Server Error");
+  }
+};
+
+const leetcodefetch = async (username) => {
+  const url = "https://leetcode.com/graphql";
+
+  const headers = {
+    "Content-Type": "application/json",
+    "User-Agent":
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3",
+    cookies: "asdfads",
+    Accept:
+      "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,/;q=0.8,application/signed-exchange;v=b3;q=0.9",
+  };
+
+  const query = `
+      query combinedQueries($username: String!) {
+          matchedUser(username: $username) {
+              submitStatsGlobal {
+                  acSubmissionNum {
+                      difficulty
+                      count
+                  }
+              }
+          }
+          userContestRanking(username: $username) {
+              attendedContestsCount
+              rating
+              globalRanking
+              totalParticipants
+              topPercentage
+              badge {
+                  name
+              }
+          }
+      }
+  `;
+
+  const variables = {
+    username: `${username}`,
+  };
+
+  const payload = {
+    query: query,
+    variables: variables,
+  };
+
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: headers,
+      body: JSON.stringify(payload),
+    });
+
+    if (response.status === 200) {
+      const json = await response.json();
+      const matchedUser = json.data.matchedUser;
+      const contest = json.data.userContestRanking;
+
+      let total = 0;
+      if (matchedUser) {
+        const problemsSolved = matchedUser.submitStatsGlobal.acSubmissionNum;
+        for (const pair of problemsSolved) {
+          if (pair.difficulty === "All") {
+            total = pair.count;
+          }
+        }
+      }
+
+      let contestCount = 0,
+        rating = 0,
+        globalRank = 0,
+        topPercent = 0;
+      if (contest) {
+        contestCount = contest.attendedContestsCount;
+        rating = contest.rating;
+        globalRank = contest.globalRanking;
+        topPercent = contest.topPercentage;
+      }
+
+      return {
+        username: username,
+        total: total,
+        total_contests_count: contestCount,
+        contest_rating: rating,
+        global_rank: globalRank,
+        top: topPercent,
+      };
+    } else if (response.status === 404) {
+      return {};
+    } else {
+      throw new Error("Received a 403 Forbidden response");
+    }
+  } catch (error) {
+    console.error(error);
+    return {};
+  }
+};
 
 module.exports = {
   test,
@@ -467,4 +581,6 @@ module.exports = {
   codechefapi,
   getCodeforces,
   codeforcesapi,
+  leetcodeapi,
+  leetcodefetch,
 };
